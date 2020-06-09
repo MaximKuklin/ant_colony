@@ -60,15 +60,19 @@ class VPR:
         self.best_ant_sol = None
         self.raw_prob_matrix = (self.pheramone_map**self.alpha) * (self.adjacency_matrix**self.beta)
         self.K = 10
+        self.potential_vertexes = np.ones(self.dimension)
 
     def get_probality(self, prob_list):
         # summa = prob_list.sum()
 
+        if prob_list.sum() == 0:
+            print("ON NO ZERO")
         prob_list = prob_list/prob_list.sum()
+
         return prob_list
 
     def get_next_vertex(self, pos):
-        prob_list = deepcopy(self.raw_prob_matrix[pos]) * self.tabu
+        prob_list = deepcopy(self.raw_prob_matrix[pos]) * self.tabu * self.potential_vertexes
         idx = np.random.choice(np.arange(0, self.dimension), p=self.get_probality(prob_list))
         return idx
 
@@ -111,25 +115,39 @@ class VPR:
                 capacity_left = self.capacity
                 self.tabu = np.ones(self.dimension)
                 self.tabu[0] = 0
+                self.potential_vertexes = np.ones(self.dimension)
+                self.potential_vertexes[0] = 0
                 while self.tabu.sum() != 0:
+                    potential_flag = 0
                     next_state = self.get_next_vertex(current_state)
                     store_capacity = self.p_requests[next_state]
                     if capacity_left - store_capacity < 0:
-                        one_path_solution.append(0)
-                        solutions.append(one_path_solution)
-                        one_path_solution = [0]
-                        current_state = 0
-                        capacity_left = self.capacity
+                        self.potential_vertexes[next_state] = 0
+                        potential_flag = 1
+                        if self.potential_vertexes.sum() == 0:
+                            one_path_solution.append(0)
+                            solutions.append(one_path_solution)
+                            one_path_solution = [0]
+                            self.potential_vertexes = deepcopy(self.tabu)
+                            current_state = 0
+                            capacity_left = self.capacity
+                            continue
+                    if potential_flag:
                         continue
                     one_path_solution.append(next_state)
                     capacity_left -= store_capacity
                     self.local_update(current_state, next_state)
-                    current_state = next_state
+                    current_state = deepcopy(next_state)
                     self.tabu[current_state] = 0
+                    self.potential_vertexes[current_state] = 0
 
+                one_path_solution.append(0)
+                solutions.append(one_path_solution)
 
                 full_cost = sum([self.get_cost(sol) for sol in solutions])
-                assert len(solutions) <= self.number_of_trucks
+                assert all(np.unique(np.hstack(solutions)) == np.arange(self.dimension))
+                # assert len(solutions) <= self.number_of_trucks
+                # [sol for a in solutions if a ]
                 all_solutions_by_ant.append(solutions)
                 all_costs_by_ant.append(full_cost)
 
@@ -151,5 +169,6 @@ class VPR:
         print(iam_the_best_of_the_best_sol)
         print(f'Cost: {iam_the_best_of_the_best_cost}')
 
-test1 = VPR(get_data('benchmark/A/A-n32-k5.vrp'), 500)
+
+test1 = VPR(get_data('benchmark/A/A-n32-k5.vrp'), 150)
 test1.compute()
